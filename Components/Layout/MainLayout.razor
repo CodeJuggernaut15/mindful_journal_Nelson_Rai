@@ -1,0 +1,150 @@
+﻿@inherits LayoutComponentBase
+@using MindfulJournal.Services
+@using MindfulJournal.Components.Shared
+@inject ThemeService ThemeService
+@inject SecurityService SecurityService
+
+<MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="@_isDarkMode" Theme="@_customTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<LockScreen IsVisible="@_isLocked" OnUnlocked="OnUnlocked" />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-2">Mindful Journal</MudText>
+        <MudSpacer />
+        @if (SecurityService.IsLockEnabled)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Lock" Color="Color.Inherit" 
+                           OnClick="@LockApp" Title="Lock App" />
+        }
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                       Color="Color.Inherit" OnClick="@ToggleDarkMode" Title="Toggle theme" />
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="@_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudNavMenu>
+            <MudText Typo="Typo.h6" Class="px-4 py-4" Color="Color.Primary">Navigation</MudText>
+            <MudDivider />
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+                Dashboard
+            </MudNavLink>
+            <MudNavLink Href="/entries" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MenuBook">
+                Journal Entries
+            </MudNavLink>
+            <MudNavLink Href="/entry/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Add">
+                New Entry
+            </MudNavLink>
+            <MudNavLink Href="/analytics" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Analytics">
+                Analytics
+            </MudNavLink>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
+                Settings
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 px-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = true;
+    private bool _isLocked = false;
+    private MudThemeProvider? _mudThemeProvider;
+    private MudTheme _customTheme = new();
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        _isLocked = SecurityService.IsLocked;
+        UpdateTheme();
+        ThemeService.OnThemeChanged += OnThemeChanged;
+        SecurityService.LockStateChanged += OnLockStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _mudThemeProvider != null)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        UpdateTheme();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnLockStateChanged(bool isLocked)
+    {
+        _isLocked = isLocked;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnUnlocked()
+    {
+        _isLocked = false;
+        StateHasChanged();
+    }
+
+    private async Task LockApp()
+    {
+        await SecurityService.LockAsync();
+    }
+
+    private void UpdateTheme()
+    {
+        _customTheme = new MudTheme
+        {
+            PaletteLight = new PaletteLight
+            {
+                Primary = ThemeService.CustomPrimaryColor,
+                Secondary = "#FF4081",
+                AppbarBackground = ThemeService.CustomPrimaryColor,
+                Background = "#F5F5F5",
+                Surface = "#FFFFFF",
+                DrawerBackground = "#FFFFFF",
+                DrawerText = "#424242",
+                DrawerIcon = "#616161"
+            },
+            PaletteDark = new PaletteDark
+            {
+                Primary = ThemeService.CustomPrimaryColor,
+                Secondary = "#FF4081",
+                AppbarBackground = "#1E1E2E",
+                Background = "#121212",
+                Surface = "#1E1E2E",
+                DrawerBackground = "#1E1E2E",
+                DrawerText = "#E0E0E0",
+                DrawerIcon = "#BDBDBD"
+            }
+        };
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void ToggleDarkMode()
+    {
+        ThemeService.ToggleDarkMode();
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+        SecurityService.LockStateChanged -= OnLockStateChanged;
+    }
+}
