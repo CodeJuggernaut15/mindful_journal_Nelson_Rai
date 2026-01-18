@@ -1,0 +1,428 @@
+@page "/entries"
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@using MindfulJournal.Components.Shared
+@inject JournalService JournalService
+@inject ExportService ExportService
+@inject PdfExportService PdfExportService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">Journal Entries</MudText>
+    <div class="d-flex gap-2">
+        <MudMenu Label="@(_isExporting ? "Exporting..." : "Export")" 
+                 Variant="Variant.Outlined" 
+                 Color="Color.Secondary" 
+                 StartIcon="@(_isExporting ? Icons.Material.Filled.Downloading : Icons.Material.Filled.FileDownload)"
+                 Disabled="@_isExporting"
+                 EndIcon="@Icons.Material.Filled.KeyboardArrowDown">
+            <MudMenuItem OnClick="ExportAsPdf" Icon="@Icons.Material.Filled.PictureAsPdf">Export as PDF</MudMenuItem>
+            <MudMenuItem OnClick="ExportAsText" Icon="@Icons.Material.Filled.Description">Export as Text</MudMenuItem>
+        </MudMenu>
+        
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="CreateNewEntry">
+            New Entry
+        </MudButton>
+    </div>
+</div>
+
+<MudPaper Elevation="1" Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_searchTerm" Label="Search entries..." Variant="Variant.Outlined"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" OnKeyUp="OnSearchKeyUp" />
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudSelect T="MoodType?" @bind-Value="_selectedMood" Label="Mood" Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var mood in Enum.GetValues<MoodType>().Where(m => m != MoodType.None))
+                {
+                    <MudSelectItem Value="@((MoodType?)mood)">
+                        @MoodHelper.GetMoodEmoji(mood) @MoodHelper.GetMoodName(mood)
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudDatePicker @bind-Date="_fromDate" Label="From Date" Variant="Variant.Outlined"
+                           Clearable="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudDatePicker @bind-Date="_toDate" Label="To Date" Variant="Variant.Outlined"
+                           Clearable="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="12" md="2" Class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyFilters">
+                Apply
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Clear" Color="Color.Secondary" 
+                          OnClick="ClearFilters" Title="Clear filters" />
+        </MudItem>
+    </MudGrid>
+    
+    @if (_allTags.Any())
+    {
+        <div class="mt-3">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">Filter by tags:</MudText>
+            <div class="d-flex gap-2 flex-wrap">
+                @foreach (var tag in _allTags.Take(10))
+                {
+                    var isSelected = _selectedTags.Contains(tag);
+                    <MudChip T="string" Color="@(isSelected ? Color.Primary : Color.Default)" 
+                             Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => ToggleTag(tag))">
+                        @tag
+                    </MudChip>
+                }
+            </div>
+        </div>
+    }
+</MudPaper>
+
+@if (_isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (!_entries.Any())
+{
+    <MudPaper Elevation="1" Class="pa-6 text-center">
+        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-3">No entries found</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            @if (string.IsNullOrEmpty(_searchTerm) && !_selectedMood.HasValue)
+            {
+                <text>Start your mindfulness journey by creating your first journal entry.</text>
+            }
+            else
+            {
+                <text>Try adjusting your search or filter criteria.</text>
+            }
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateNewEntry">
+            Create Entry
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Showing @((_currentPage - 1) * _pageSize + 1) - @Math.Min(_currentPage * _pageSize, _entries.Count) of @_entries.Count entries
+        </MudText>
+        <div class="d-flex align-center gap-2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Items per page:</MudText>
+            <MudSelect T="int" @bind-Value="_pageSize" Variant="Variant.Outlined" Dense="true" 
+                       Style="width: 80px;" Margin="Margin.Dense">
+                <MudSelectItem Value="5">5</MudSelectItem>
+                <MudSelectItem Value="10">10</MudSelectItem>
+                <MudSelectItem Value="20">20</MudSelectItem>
+                <MudSelectItem Value="50">50</MudSelectItem>
+            </MudSelect>
+        </div>
+    </div>
+    
+    @foreach (var entry in GetPaginatedEntries())
+    {
+        <div class="entry-item d-flex align-center gap-2">
+            <div class="flex-grow-1">
+                <EntryCard Entry="entry" OnClick="ViewEntry" />
+            </div>
+            <div class="entry-actions d-flex flex-column gap-1">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
+                               OnClick="@(() => EditEntry(entry))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => ConfirmDelete(entry))" />
+            </div>
+        </div>
+    }
+    
+    @if (TotalPages > 1)
+    {
+        <div class="d-flex justify-center mt-4">
+            <MudPagination Count="@TotalPages" @bind-Selected="_currentPage" 
+                           Color="Color.Primary" Variant="Variant.Filled"
+                           ShowFirstButton="true" ShowLastButton="true"
+                           BoundaryCount="1" MiddleCount="3" />
+        </div>
+    }
+}
+
+@code {
+    private List<JournalEntry> _entries = new();
+    private List<JournalEntry> _allEntriesCache = new();
+    private string _searchTerm = "";
+    private MoodType? _selectedMood;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private HashSet<string> _selectedTags = new();
+    private List<string> _allTags = new();
+    private bool _isLoading = true;
+    private bool _isExporting = false;
+    
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    
+    private int TotalPages => (int)Math.Ceiling((double)_entries.Count / _pageSize);
+    
+    private List<JournalEntry> GetPaginatedEntries()
+    {
+        return _entries
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntries();
+        await LoadAllTags();
+    }
+
+    private async Task LoadEntries()
+    {
+        _isLoading = true;
+        _allEntriesCache = await JournalService.GetAllEntriesAsync();
+        _entries = _allEntriesCache;
+        _isLoading = false;
+    }
+
+    private async Task LoadAllTags()
+    {
+        var entries = await JournalService.GetAllEntriesAsync();
+        _allTags = entries
+            .SelectMany(e => e.TagList)
+            .GroupBy(t => t.ToLower())
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .Distinct()
+            .ToList();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await ApplyFilters();
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        _isLoading = true;
+
+        _entries = _allEntriesCache.ToList();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            var lowerSearch = _searchTerm.ToLower();
+            _entries = _entries.Where(e => 
+                e.Title.ToLower().Contains(lowerSearch) || 
+                e.Content.ToLower().Contains(lowerSearch) ||
+                e.Tags.ToLower().Contains(lowerSearch)).ToList();
+        }
+
+        if (_selectedMood.HasValue)
+        {
+            _entries = _entries.Where(e => e.Mood == _selectedMood.Value).ToList();
+        }
+
+        if (_fromDate.HasValue)
+        {
+            _entries = _entries.Where(e => e.CreatedAt.Date >= _fromDate.Value.Date).ToList();
+        }
+        if (_toDate.HasValue)
+        {
+            _entries = _entries.Where(e => e.CreatedAt.Date <= _toDate.Value.Date).ToList();
+        }
+
+        if (_selectedTags.Any())
+        {
+            _entries = _entries.Where(e => 
+                e.TagList.Any(t => _selectedTags.Contains(t.ToLower()))).ToList();
+        }
+
+        _currentPage = 1;
+        
+        _isLoading = false;
+        await Task.CompletedTask;
+    }
+
+    private void ToggleTag(string tag)
+    {
+        if (_selectedTags.Contains(tag))
+            _selectedTags.Remove(tag);
+        else
+            _selectedTags.Add(tag);
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = "";
+        _selectedMood = null;
+        _fromDate = null;
+        _toDate = null;
+        _selectedTags.Clear();
+        _currentPage = 1; 
+        await LoadEntries();
+    }
+
+    private void CreateNewEntry()
+    {
+        Navigation.NavigateTo("/entry/new");
+    }
+
+    private void ViewEntry(JournalEntry entry)
+    {
+        Navigation.NavigateTo($"/entry/{entry.Id}");
+    }
+
+    private void EditEntry(JournalEntry entry)
+    {
+        Navigation.NavigateTo($"/entry/{entry.Id}/edit");
+    }
+
+    private async Task ConfirmDelete(JournalEntry entry)
+    {
+        var parameters = new DialogParameters<MudMessageBox>
+        {
+            { x => x.Title, "Delete Entry" },
+            { x => x.MarkupMessage, new MarkupString($"Are you sure you want to delete <b>\"{entry.Title}\"</b>? This action cannot be undone.") },
+            { x => x.YesText, "Delete" },
+            { x => x.NoText, "Cancel" }
+        };
+
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Delete Entry", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await JournalService.DeleteEntryAsync(entry);
+            await LoadEntries();
+            await LoadAllTags();
+        }
+    }
+
+    private async Task ExportAsPdf()
+    {
+        await ExportCommon(true);
+    }
+
+    private async Task ExportAsText()
+    {
+        await ExportCommon(false);
+    }
+
+    private async Task ExportCommon(bool isPdf)
+    {
+        if (!_entries.Any())
+        {
+            Snackbar.Add("No entries to export. Create some journal entries first.", Severity.Warning);
+            return;
+        }
+
+        _isExporting = true;
+        StateHasChanged();
+
+        try
+        {
+            string filePath;
+            
+            if (isPdf)
+            {
+                if (_fromDate.HasValue && _toDate.HasValue)
+                {
+                    filePath = await PdfExportService.ExportByDateRangePdfAsync(_fromDate.Value, _toDate.Value);
+                }
+                else
+                {
+                    filePath = await PdfExportService.ExportAllToPdfAsync();
+                }
+            }
+            else
+            {
+                string content;
+                if (_entries.Count != _allEntriesCache.Count)
+                {
+                    content = FormatFilteredEntries(_entries);
+                }
+                else
+                {
+                    content = await ExportService.ExportAllToTextAsync();
+                }
+                
+                var fileName = ExportService.GenerateFileName();
+                filePath = await ExportService.SaveToFileAsync(content, fileName);
+            }
+
+            Snackbar.Add($"Successfully exported to: {filePath}", Severity.Success);
+            await OpenExportedFile(filePath);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Export failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isExporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenExportedFile(string filePath)
+    {
+        try
+        {
+            await Launcher.OpenAsync(new OpenFileRequest
+            {
+                File = new ReadOnlyFile(filePath)
+            });
+        }
+        catch
+        {
+            try
+            {
+                var folder = System.IO.Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                }
+            }
+            catch { }
+        }
+    }
+
+    private string FormatFilteredEntries(List<JournalEntry> entries)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("╔══════════════════════════════════════════════════════════════╗");
+        sb.AppendLine("║                    MINDFUL JOURNAL EXPORT                     ║");
+        sb.AppendLine("╚══════════════════════════════════════════════════════════════╝");
+        sb.AppendLine();
+        sb.AppendLine($"Exported on: {DateTime.Now:MMMM dd, yyyy 'at' h:mm tt}");
+        sb.AppendLine($"Total Entries: {entries.Count} (Filtered)");
+        sb.AppendLine();
+        sb.AppendLine("────────────────────────────────────────────────────────────────");
+        sb.AppendLine();
+
+        foreach (var entry in entries)
+        {
+            sb.AppendLine($"📅 {entry.CreatedAt:dddd, MMMM dd, yyyy 'at' h:mm tt}");
+            sb.AppendLine($"📝 {entry.Title}");
+            if (entry.Mood != MoodType.None)
+                sb.AppendLine($"   Mood: {entry.MoodEmoji} {entry.MoodName}");
+            if (entry.TagList.Any())
+                sb.AppendLine($"   Tags: {string.Join(", ", entry.TagList)}");
+            sb.AppendLine();
+            sb.AppendLine(entry.Content);
+            sb.AppendLine();
+            sb.AppendLine("────────────────────────────────────────────────────────────────");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+}

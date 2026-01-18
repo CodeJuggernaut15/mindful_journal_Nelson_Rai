@@ -1,0 +1,387 @@
+@page "/entry/new"
+@page "/entry/{Id:int}"
+@page "/entry/{Id:int}/edit"
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@using MindfulJournal.Components.Shared
+@using Markdig
+@inject JournalService JournalService
+@inject TagService TagService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Class="mb-4">
+    @(_isEditMode ? "Edit Entry" : (_isViewMode ? _entry.Title : "New Entry"))
+</MudText>
+
+@if (_isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_isViewMode)
+{
+    <MudPaper Elevation="2" Class="pa-6">
+        <div class="d-flex justify-space-between align-center mb-4">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Style="@($"background-color: {_entry.MoodColor}; color: white;")" Size="Size.Large">
+                    @_entry.MoodEmoji
+                </MudAvatar>
+                @foreach (var mood in _entry.SecondaryMoodList)
+                {
+                    <MudAvatar Style="@($"background-color: {MoodHelper.GetMoodColor(mood)}; color: white;")" Size="Size.Medium">
+                        @MoodHelper.GetMoodEmoji(mood)
+                    </MudAvatar>
+                }
+                <div>
+                    <MudText Typo="Typo.h5">@_entry.Title</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @_entry.CreatedAt.ToString("MMMM dd, yyyy 'at' h:mm tt")
+                        @if (_entry.UpdatedAt.HasValue)
+                        {
+                            <text> (Updated: @_entry.UpdatedAt.Value.ToString("MMM dd, yyyy"))</text>
+                        }
+                    </MudText>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="SwitchToEditMode">
+                    Edit
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="GoBack">
+                    Back
+                </MudButton>
+            </div>
+        </div>
+
+        @if (_entry.Mood != MoodType.None)
+        {
+            <div class="d-flex gap-2 mb-3 flex-wrap align-center">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Moods:</MudText>
+                <MudChip T="string" Size="Size.Small" Style="@($"background-color: {_entry.MoodColor}; color: white;")">
+                    @_entry.MoodEmoji @_entry.MoodName
+                </MudChip>
+                @foreach (var mood in _entry.SecondaryMoodList)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                             Style="@($"border-color: {MoodHelper.GetMoodColor(mood)}; color: {MoodHelper.GetMoodColor(mood)};")">
+                        @MoodHelper.GetMoodEmoji(mood) @MoodHelper.GetMoodName(mood)
+                    </MudChip>
+                }
+            </div>
+        }
+
+        @if (_entry.TagList.Any())
+        {
+            <div class="d-flex gap-2 mb-4 flex-wrap">
+                @foreach (var tag in _entry.TagList)
+                {
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">@tag</MudChip>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_entry.Category))
+        {
+            <div class="mb-2">
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">Category:</MudText>
+                <MudChip T="string" Color="Color.Info" Variant="Variant.Filled" Size="Size.Small">@_entry.Category</MudChip>
+            </div>
+        }
+
+        <MudDivider Class="mb-4" />
+
+        <div class="rendered-markdown-content">
+            @((MarkupString)RenderMarkdown(_entry.Content))
+        </div>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Elevation="2" Class="pa-6">
+        <MudForm @ref="_form" @bind-IsValid="_isValid">
+            <MudTextField @bind-Value="_entry.Title" Label="Title" Variant="Variant.Outlined"
+                          Required="true" RequiredError="Title is required"
+                          Class="mb-4" />
+            
+            <MudDatePicker Label="Date" @bind-Date="_entryDate" Variant="Variant.Outlined" Class="mb-4" ReadOnly="true" />
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">What's on your mind?</MudText>
+            <RichTextEditor @bind-Content="_entry.Content" Lines="12" 
+                            Placeholder="Start writing your journal entry... Use the toolbar for formatting." />
+
+            <MudDivider Class="my-4" />
+
+            <MoodSelector @bind-PrimaryMood="_entry.Mood" 
+                          @bind-SecondaryMoods="_secondaryMoods" />
+
+            <MudDivider Class="my-4" />
+
+            <div class="d-flex gap-4 mb-4">
+                <MudTextField @bind-Value="_entry.Category" Label="Category" Variant="Variant.Outlined"
+                              HelperText="e.g. Personal, Work, Health"
+                              Class="flex-grow-1" />
+                
+                <MudSelect T="string" Label="Tags" MultiSelection="true" @bind-SelectedValues="_selectedTags"
+                           Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                           HelperText="Select tags for this entry" Class="flex-grow-1">
+                    @foreach (var tag in _availableTags)
+                    {
+                        <MudSelectItem T="string" Value="@tag.Name">@tag.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+            </div>
+
+            <div class="d-flex justify-end gap-2 mt-4">
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="GoBack">
+                    Cancel
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_isValid)"
+                           OnClick="SaveEntry">
+                    @(_isEditMode ? "Update" : "Save") Entry
+                </MudButton>
+            </div>
+        </MudForm>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private JournalEntry _entry = new();
+    private MudForm? _form;
+    private bool _isValid = false;
+    private bool _isLoading = true;
+    private IEnumerable<string> _selectedTags = new HashSet<string>();
+    private List<Tag> _availableTags = new();
+    private List<MoodType> _secondaryMoods = new();
+    private DateTime? _entryDate;
+
+    private bool _isViewMode => Id.HasValue && !Navigation.Uri.EndsWith("/edit");
+    private bool _isEditMode => Id.HasValue && Navigation.Uri.EndsWith("/edit");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+
+        // Load tags
+        _availableTags = await TagService.GetAllTagsAsync();
+
+        if (Id.HasValue)
+        {
+            var entry = await JournalService.GetEntryByIdAsync(Id.Value);
+            if (entry != null)
+            {
+                _entry = entry;
+                // Initialize selected tags from entry
+                _selectedTags = new HashSet<string>(_entry.TagList);
+                _secondaryMoods = _entry.SecondaryMoodList;
+                _entryDate = _entry.CreatedAt;
+            }
+            else
+            {
+                Snackbar.Add("Entry not found", Severity.Error);
+                Navigation.NavigateTo("/entries");
+                return;
+            }
+        }
+        else
+        {
+            var existingEntry = await JournalService.GetEntryByDateAsync(DateTime.Today);
+            if (existingEntry != null)
+            {
+                Snackbar.Add("You already have a journal entry for today. Redirecting to edit...", Severity.Info);
+                Navigation.NavigateTo($"/entry/{existingEntry.Id}/edit");
+                return;
+            }
+
+            _entry = new JournalEntry();
+            _selectedTags = new HashSet<string>();
+            _secondaryMoods = new List<MoodType>();
+            _entryDate = DateTime.Today;
+        }
+
+        _isLoading = false;
+    }
+
+    private void SwitchToEditMode()
+    {
+        Navigation.NavigateTo($"/entry/{Id}/edit");
+    }
+
+    private async Task SaveEntry()
+    {
+        if (_form != null) 
+        {
+            await _form.Validate(); 
+            if (!_isValid) return;
+        }
+
+        _entry.SecondaryMoodList = _secondaryMoods;
+
+        if (_entryDate.HasValue)
+        {
+             _entry.CreatedAt = _entryDate.Value.Date.Add(DateTime.Now.TimeOfDay);
+        }
+
+        // Save selected tags
+        _entry.Tags = string.Join(",", _selectedTags);
+
+        try
+        {
+            if (_isEditMode)
+            {
+                await JournalService.UpdateEntryAsync(_entry);
+                Snackbar.Add("Entry updated successfully!", Severity.Success);
+            }
+            else
+            {
+                await JournalService.CreateEntryAsync(_entry);
+                Snackbar.Add("Entry created successfully!", Severity.Success);
+            }
+
+            Navigation.NavigateTo("/entries");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving entry: {ex.Message}", Severity.Error);
+        }
+    }
+    
+
+
+    private void GoBack()
+    {
+        if (_isViewMode || _isEditMode)
+        {
+            Navigation.NavigateTo("/entries");
+        }
+        else
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private string RenderMarkdown(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return "<p style='color: var(--mud-palette-text-secondary);'>No content</p>";
+        
+        try
+        {
+            var pipeline = new MarkdownPipelineBuilder()
+                .UseAutoLinks()
+                .UseEmphasisExtras()
+                .UseTaskLists()
+                .Build();
+            return Markdown.ToHtml(markdown, pipeline);
+        }
+        catch
+        {
+            return $"<pre>{System.Net.WebUtility.HtmlEncode(markdown)}</pre>";
+        }
+    }
+}
+
+<style>
+    .rendered-markdown-content {
+        line-height: 1.7;
+    }
+    
+    .rendered-markdown-content h1 { 
+        font-size: 1.75rem; 
+        font-weight: 600; 
+        margin: 1.5rem 0 0.75rem; 
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        padding-bottom: 0.5rem;
+    }
+    .rendered-markdown-content h2 { 
+        font-size: 1.5rem; 
+        font-weight: 600; 
+        margin: 1.25rem 0 0.5rem; 
+    }
+    .rendered-markdown-content h3 { 
+        font-size: 1.25rem; 
+        font-weight: 600; 
+        margin: 1rem 0 0.5rem; 
+    }
+    .rendered-markdown-content p { 
+        margin: 0.75rem 0; 
+    }
+    .rendered-markdown-content ul, 
+    .rendered-markdown-content ol { 
+        margin: 0.75rem 0; 
+        padding-left: 1.75rem; 
+    }
+    .rendered-markdown-content li { 
+        margin: 0.35rem 0; 
+    }
+    .rendered-markdown-content blockquote { 
+        border-left: 4px solid var(--mud-palette-primary); 
+        padding-left: 1rem; 
+        margin: 1rem 0;
+        color: var(--mud-palette-text-secondary);
+        font-style: italic;
+        background-color: var(--mud-palette-background-grey);
+        padding: 0.75rem 1rem;
+        border-radius: 0 4px 4px 0;
+    }
+    .rendered-markdown-content code { 
+        background-color: var(--mud-palette-background-grey); 
+        padding: 2px 6px; 
+        border-radius: 4px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9em;
+    }
+    .rendered-markdown-content pre { 
+        background-color: var(--mud-palette-background-grey); 
+        padding: 1rem; 
+        border-radius: 4px;
+        overflow-x: auto;
+        margin: 1rem 0;
+    }
+    .rendered-markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+    .rendered-markdown-content a { 
+        color: var(--mud-palette-primary); 
+        text-decoration: underline; 
+    }
+    .rendered-markdown-content a:hover {
+        text-decoration: none;
+    }
+    .rendered-markdown-content hr { 
+        border: none; 
+        border-top: 1px solid var(--mud-palette-lines-default); 
+        margin: 1.5rem 0; 
+    }
+    .rendered-markdown-content strong { 
+        font-weight: 600; 
+    }
+    .rendered-markdown-content em { 
+        font-style: italic; 
+    }
+    .rendered-markdown-content img {
+        max-width: 100%;
+        border-radius: 4px;
+    }
+    .rendered-markdown-content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1rem 0;
+    }
+    .rendered-markdown-content th,
+    .rendered-markdown-content td {
+        border: 1px solid var(--mud-palette-lines-default);
+        padding: 0.5rem;
+        text-align: left;
+    }
+    .rendered-markdown-content th {
+        background-color: var(--mud-palette-background-grey);
+        font-weight: 600;
+    }
+</style>
+
