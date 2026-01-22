@@ -1,0 +1,259 @@
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+
+<MudPaper Elevation="2" Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Mood Calendar</MudText>
+        <div class="d-flex gap-2 align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" 
+                           OnClick="PreviousMonth" />
+            <MudText Typo="Typo.subtitle1" Class="mx-2">@_currentMonth.ToString("MMMM yyyy")</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" 
+                           OnClick="NextMonth" Disabled="@(_currentMonth.Month == DateTime.Now.Month && _currentMonth.Year == DateTime.Now.Year)" />
+        </div>
+    </div>
+    
+    <div class="calendar-grid mb-2">
+        @foreach (var day in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+        {
+            <div class="calendar-header">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@day</MudText>
+            </div>
+        }
+    </div>
+    
+    <div class="calendar-grid">
+        @foreach (var day in _calendarDays)
+        {
+            @if (day.Day == 0)
+            {
+                <div class="calendar-day empty"></div>
+            }
+            else
+            {
+                var entry = GetEntryForDay(day.Date);
+                var isToday = day.Date == DateTime.Today;
+                <MudTooltip Text="@GetTooltipText(day.Date, entry)" Placement="Placement.Top">
+                    <div class="calendar-day @(isToday ? "today" : "") @(entry != null ? "has-entry" : "") @(day.IsCurrentMonth ? "" : "other-month")"
+                         @onclick="@(() => OnDayClick(day.Date, entry))">
+                        <span class="day-number">@day.Day</span>
+                        @if (entry != null)
+                        {
+                            <div class="mood-indicator" style="background-color: @entry.MoodColor;">
+                                <span class="mood-emoji-small">@entry.MoodEmoji</span>
+                            </div>
+                        }
+                    </div>
+                </MudTooltip>
+            }
+        }
+    </div>
+    
+    <div class="d-flex gap-3 mt-3 flex-wrap justify-center">
+        <div class="d-flex align-center gap-1">
+            <div class="legend-dot today-dot"></div>
+            <MudText Typo="Typo.caption">Today</MudText>
+        </div>
+        <div class="d-flex align-center gap-1">
+            <div class="legend-dot entry-dot"></div>
+            <MudText Typo="Typo.caption">Has Entry</MudText>
+        </div>
+    </div>
+</MudPaper>
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+    
+    .calendar-header {
+        text-align: center;
+        padding: 4px;
+    }
+    
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.2s ease;
+        background-color: var(--mud-palette-background-grey);
+        min-height: 45px;
+    }
+    
+    .calendar-day:hover:not(.empty) {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .calendar-day.empty {
+        background: transparent;
+        cursor: default;
+    }
+    
+    .calendar-day.today {
+        border: 2px solid var(--mud-palette-primary);
+    }
+    
+    .calendar-day.has-entry {
+        background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%);
+    }
+    
+    .calendar-day.other-month {
+        opacity: 0.4;
+    }
+    
+    .day-number {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    .mood-indicator {
+        position: absolute;
+        bottom: 4px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .mood-emoji-small {
+        font-size: 0.65rem;
+    }
+    
+    .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    
+    .today-dot {
+        border: 2px solid var(--mud-palette-primary);
+        background: transparent;
+    }
+    
+    .entry-dot {
+        background: linear-gradient(135deg, #4CAF50, #8BC34A);
+    }
+</style>
+
+@code {
+    private DateTime _currentMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private List<CalendarDay> _calendarDays = new();
+    private Dictionary<DateTime, JournalEntry> _entriesByDate = new();
+    
+    /// <summary>
+    /// Initializes the calendar by loading entries and generating days for the current month.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntries();
+        GenerateCalendarDays();
+    }
+
+    /// <summary>
+    /// Loads all journal entries from the service and groups them by date.
+    /// </summary>
+    private async Task LoadEntries()
+    {
+        var entries = await JournalService.GetAllEntriesAsync();
+        _entriesByDate = entries
+            .GroupBy(e => e.CreatedAt.Date)
+            .ToDictionary(g => g.Key, g => g.First());
+    }
+
+    /// <summary>
+    /// Generates the list of calendar days, including padding for previous and next months.
+    /// </summary>
+    private void GenerateCalendarDays()
+    {
+        _calendarDays.Clear();
+        
+        var firstDayOfMonth = new DateTime(_currentMonth.Year, _currentMonth.Month, 1);
+        var daysInMonth = DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+        var startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
+        
+        for (int i = 0; i < startDayOfWeek; i++)
+        {
+            _calendarDays.Add(new CalendarDay { Day = 0, IsCurrentMonth = false });
+        }
+        
+        for (int day = 1; day <= daysInMonth; day++)
+        {
+            _calendarDays.Add(new CalendarDay 
+            { 
+                Day = day, 
+                Date = new DateTime(_currentMonth.Year, _currentMonth.Month, day),
+                IsCurrentMonth = true 
+            });
+        }
+    }
+
+    private JournalEntry? GetEntryForDay(DateTime date)
+    {
+        return _entriesByDate.TryGetValue(date, out var entry) ? entry : null;
+    }
+
+    private string GetTooltipText(DateTime date, JournalEntry? entry)
+    {
+        if (entry == null)
+            return $"{date:MMMM dd} - No entry";
+        return $"{date:MMMM dd} - {entry.MoodName}: {entry.Title}";
+    }
+
+    /// <summary>
+    /// Handles the click event on a calendar day.
+    /// Navigates to the entry detail or new entry page.
+    /// </summary>
+    private void OnDayClick(DateTime date, JournalEntry? entry)
+    {
+        if (entry != null)
+        {
+            Navigation.NavigateTo($"/entry/{entry.Id}");
+        }
+        else if (date <= DateTime.Today)
+        {
+            Navigation.NavigateTo("/entry/new");
+        }
+    }
+
+    /// <summary>
+    /// Navigates to the previous month.
+    /// </summary>
+    private async Task PreviousMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(-1);
+        GenerateCalendarDays();
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Navigates to the next month, if applicable.
+    /// </summary>
+    private async Task NextMonth()
+    {
+        if (_currentMonth.Month < DateTime.Now.Month || _currentMonth.Year < DateTime.Now.Year)
+        {
+            _currentMonth = _currentMonth.AddMonths(1);
+            GenerateCalendarDays();
+        }
+        await Task.CompletedTask;
+    }
+
+    private class CalendarDay
+    {
+        public int Day { get; set; }
+        public DateTime Date { get; set; }
+        public bool IsCurrentMonth { get; set; }
+    }
+}

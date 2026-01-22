@@ -1,0 +1,330 @@
+@using Markdig
+
+<MudPaper Elevation="1" Class="rich-text-editor">
+    <div class="editor-toolbar d-flex gap-1 pa-2 flex-wrap">
+        <MudTooltip Text="Bold">
+            <MudIconButton Icon="@Icons.Material.Filled.FormatBold" Size="Size.Small" 
+                           OnClick="@(() => InsertFormatting("**", "**", "bold"))" />
+        </MudTooltip>
+        
+        <MudTooltip Text="Italic">
+            <MudIconButton Icon="@Icons.Material.Filled.FormatItalic" Size="Size.Small" 
+                           OnClick="@(() => InsertFormatting("*", "*", "italic"))" />
+        </MudTooltip>
+        
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
+        
+        <MudTooltip Text="Heading 1">
+            <MudIconButton Size="Size.Small" OnClick="@(() => InsertLinePrefix("# ", "Heading"))">
+                <span style="font-weight: bold; font-size: 14px;">H1</span>
+            </MudIconButton>
+        </MudTooltip>
+        
+        <MudTooltip Text="Heading 2">
+            <MudIconButton Size="Size.Small" OnClick="@(() => InsertLinePrefix("## ", "Subheading"))">
+                <span style="font-weight: bold; font-size: 12px;">H2</span>
+            </MudIconButton>
+        </MudTooltip>
+        
+        <MudTooltip Text="Heading 3">
+            <MudIconButton Size="Size.Small" OnClick="@(() => InsertLinePrefix("### ", "Section"))">
+                <span style="font-weight: bold; font-size: 10px;">H3</span>
+            </MudIconButton>
+        </MudTooltip>
+        
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
+        
+        <MudTooltip Text="Bullet List">
+            <MudIconButton Icon="@Icons.Material.Filled.FormatListBulleted" Size="Size.Small" 
+                           OnClick="@(() => InsertLinePrefix("- ", "Item"))" />
+        </MudTooltip>
+        
+        <MudTooltip Text="Numbered List">
+            <MudIconButton Icon="@Icons.Material.Filled.FormatListNumbered" Size="Size.Small" 
+                           OnClick="@(() => InsertLinePrefix("1. ", "Item"))" />
+        </MudTooltip>
+        
+        <MudTooltip Text="Checkbox">
+            <MudIconButton Icon="@Icons.Material.Filled.CheckBox" Size="Size.Small" 
+                           OnClick="@(() => InsertLinePrefix("- [ ] ", "Task"))" />
+        </MudTooltip>
+        
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
+        
+        <MudTooltip Text="Insert Link">
+            <MudIconButton Icon="@Icons.Material.Filled.Link" Size="Size.Small" 
+                           OnClick="ShowLinkDialog" />
+        </MudTooltip>
+        
+        <MudTooltip Text="Quote">
+            <MudIconButton Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" 
+                           OnClick="@(() => InsertLinePrefix("> ", "Quote"))" />
+        </MudTooltip>
+        
+        <MudTooltip Text="Horizontal Rule">
+            <MudIconButton Icon="@Icons.Material.Filled.HorizontalRule" Size="Size.Small" 
+                           OnClick="@(() => InsertText("\n\n---\n\n"))" />
+        </MudTooltip>
+        
+        <MudSpacer />
+        
+        <MudTooltip Text="@(_showPreview ? "Edit Mode" : "Preview")">
+            <MudIconButton Icon="@(_showPreview ? Icons.Material.Filled.Edit : Icons.Material.Filled.Preview)" 
+                           Size="Size.Small" Color="@(_showPreview ? Color.Primary : Color.Default)"
+                           OnClick="TogglePreview" />
+        </MudTooltip>
+    </div>
+    
+    <MudDivider />
+    
+    @if (_showPreview)
+    {
+        <div class="markdown-preview pa-4">
+            @if (string.IsNullOrWhiteSpace(_internalContent))
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing to preview</MudText>
+            }
+            else
+            {
+                @((MarkupString)RenderMarkdown(_internalContent))
+            }
+        </div>
+    }
+    else
+    {
+        <MudTextField T="string"
+                      Value="_internalContent"
+                      ValueChanged="OnInternalContentChanged"
+                      Variant="Variant.Text"
+                      Lines="@Lines"
+                      Placeholder="@Placeholder"
+                      Class="editor-textarea"
+                      Immediate="true"
+                      DisableUnderLine="true" />
+    }
+    
+    <div class="editor-footer d-flex justify-space-between align-center pa-2">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            @WordCount words | @CharacterCount characters
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            Markdown supported
+        </MudText>
+    </div>
+</MudPaper>
+
+<MudDialog @bind-Visible="_showLinkDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Insert Link</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_linkText" Label="Link Text" Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_linkUrl" Label="URL" Variant="Variant.Outlined" Placeholder="https://" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showLinkDialog = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmLink">Insert</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .rich-text-editor {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 4px;
+        overflow: hidden;
+        background-color: var(--mud-palette-surface);
+    }
+    
+    .editor-toolbar {
+        background-color: var(--mud-palette-background-grey);
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .editor-textarea {
+        flex-grow: 1;
+        margin-top: 0 !important; 
+    }
+
+    .editor-textarea .mud-input-control {
+        margin-top: 0 !important;
+    }
+
+    .editor-textarea .mud-input-underline:before,
+    .editor-textarea .mud-input-underline:after {
+        border: none !important; 
+    }
+    
+    .editor-textarea textarea {
+        font-family: 'Segoe UI', 'Roboto', sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        padding: 16px !important;
+        min-height: 200px; 
+    }
+    
+    .editor-footer {
+        background-color: var(--mud-palette-background-grey);
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+    
+    .markdown-preview {
+        min-height: 200px;
+        max-height: 400px;
+        overflow-y: auto;
+        background-color: var(--mud-palette-surface);
+        padding: 16px;
+    }
+    
+    .markdown-preview h1 { font-size: 1.75rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+    .markdown-preview h2 { font-size: 1.5rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+    .markdown-preview h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+    .markdown-preview p { margin: 0.5rem 0; line-height: 1.6; }
+    .markdown-preview ul, .markdown-preview ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+    .markdown-preview li { margin: 0.25rem 0; }
+    .markdown-preview blockquote { 
+        border-left: 4px solid var(--mud-palette-primary); 
+        padding-left: 1rem; 
+        margin: 0.5rem 0;
+        color: var(--mud-palette-text-secondary);
+        font-style: italic;
+    }
+    .markdown-preview code { 
+        background-color: var(--mud-palette-background-grey); 
+        padding: 2px 6px; 
+        border-radius: 4px;
+        font-family: monospace;
+    }
+    .markdown-preview pre { 
+        background-color: var(--mud-palette-background-grey); 
+        padding: 1rem; 
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+    .markdown-preview a { color: var(--mud-palette-primary); text-decoration: underline; }
+    .markdown-preview hr { border: none; border-top: 1px solid var(--mud-palette-lines-default); margin: 1rem 0; }
+    .markdown-preview strong { font-weight: 600; }
+    .markdown-preview em { font-style: italic; }
+</style>
+
+@code {
+    /// <summary>
+    /// Gets or sets the content of the editor.
+    /// </summary>
+    [Parameter]
+    public string Content { get; set; } = "";
+    
+    /// <summary>
+    /// Event callback for when the content changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> ContentChanged { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the initial number of lines for the textarea.
+    /// </summary>
+    [Parameter]
+    public int Lines { get; set; } = 10;
+    
+    /// <summary>
+    /// Gets or sets the placeholder text.
+    /// </summary>
+    [Parameter]
+    public string Placeholder { get; set; } = "Start writing... Use the toolbar for formatting or write in Markdown.";
+    
+    private string _internalContent = "";
+    private bool _showPreview = false;
+    private bool _showLinkDialog = false;
+    private string _linkText = "";
+    private string _linkUrl = "";
+    
+    private int WordCount => string.IsNullOrWhiteSpace(_internalContent) ? 0 : 
+        _internalContent.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    
+    private int CharacterCount => _internalContent?.Length ?? 0;
+    
+    /// <summary>
+    /// Synchronizes the internal content when external parameters change.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (_internalContent != Content)
+        {
+            _internalContent = Content ?? "";
+        }
+    }
+    
+    private async Task OnInternalContentChanged(string value)
+    {
+        _internalContent = value ?? "";
+        await ContentChanged.InvokeAsync(_internalContent);
+    }
+    
+    private string RenderMarkdown(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return "";
+        
+        try
+        {
+            var pipeline = new MarkdownPipelineBuilder()
+                .UseAutoLinks()
+                .UseEmphasisExtras()
+                .UseTaskLists()
+                .Build();
+            return Markdown.ToHtml(markdown, pipeline);
+        }
+        catch
+        {
+            return $"<pre>{System.Net.WebUtility.HtmlEncode(markdown)}</pre>";
+        }
+    }
+    
+    private void TogglePreview()
+    {
+        _showPreview = !_showPreview;
+    }
+    
+    private async Task InsertFormatting(string before, string after, string placeholder)
+    {
+        var insertion = $"{before}{placeholder}{after}";
+        _internalContent = (_internalContent ?? "") + insertion;
+        await ContentChanged.InvokeAsync(_internalContent);
+        StateHasChanged();
+    }
+    
+    private async Task InsertLinePrefix(string prefix, string placeholder)
+    {
+        var newLine = string.IsNullOrEmpty(_internalContent) || _internalContent.EndsWith("\n") ? "" : "\n";
+        _internalContent = (_internalContent ?? "") + $"{newLine}{prefix}{placeholder}";
+        await ContentChanged.InvokeAsync(_internalContent);
+        StateHasChanged();
+    }
+    
+    private async Task InsertText(string text)
+    {
+        _internalContent = (_internalContent ?? "") + text;
+        await ContentChanged.InvokeAsync(_internalContent);
+        StateHasChanged();
+    }
+    
+    private void ShowLinkDialog()
+    {
+        _linkText = "";
+        _linkUrl = "";
+        _showLinkDialog = true;
+    }
+    
+    private async Task ConfirmLink()
+    {
+        if (!string.IsNullOrWhiteSpace(_linkText) && !string.IsNullOrWhiteSpace(_linkUrl))
+        {
+            var linkMarkdown = $"[{_linkText}]({_linkUrl})";
+            _internalContent = (_internalContent ?? "") + linkMarkdown;
+            await ContentChanged.InvokeAsync(_internalContent);
+        }
+        _showLinkDialog = false;
+        StateHasChanged();
+    }
+}

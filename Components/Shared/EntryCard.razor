@@ -1,0 +1,86 @@
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@using Markdig
+
+<MudPaper Elevation="2" Class="pa-4 mb-3 entry-card" Style="cursor: pointer;" @onclick="OnCardClick">
+    <div class="d-flex align-center gap-3">
+        <!-- Mood Icons -->
+        <div class="d-flex align-center gap-1">
+            <MudAvatar Style="@($"background-color: {Entry.MoodColor}; color: white;")" Size="Size.Medium">
+                @Entry.MoodEmoji
+            </MudAvatar>
+            @foreach (var mood in Entry.SecondaryMoodList.Take(2))
+            {
+                <MudAvatar Style="@($"background-color: {MoodHelper.GetMoodColor(mood)}; color: white;")" Size="Size.Small">
+                    @MoodHelper.GetMoodEmoji(mood)
+                </MudAvatar>
+            }
+        </div>
+
+        <!-- Entry Content -->
+        <div class="flex-grow-1" style="min-width: 0;">
+            <div class="d-flex justify-space-between align-center">
+                <MudText Typo="Typo.h6" Class="text-truncate">@Entry.Title</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @Entry.CreatedAt.ToString("MMM dd, yyyy")
+                </MudText>
+            </div>
+            
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-truncate mt-1">
+                @GetContentPreview(Entry.Content)
+            </MudText>
+
+            @if (Entry.TagList.Any())
+            {
+                <div class="d-flex gap-1 mt-2 flex-wrap">
+                    @foreach (var tag in Entry.TagList.Take(3))
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
+                            @tag
+                        </MudChip>
+                    }
+                    @if (Entry.TagList.Count > 3)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary">
+                            +@(Entry.TagList.Count - 3) more
+                        </MudChip>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</MudPaper>
+
+
+@code {
+    [Parameter]
+    public JournalEntry Entry { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<JournalEntry> OnClick { get; set; }
+
+    private async Task OnCardClick()
+    {
+        await OnClick.InvokeAsync(Entry);
+    }
+
+    private string GetContentPreview(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return string.Empty;
+            
+        try
+        {
+            var plainText = Markdown.ToPlainText(content).Replace("\n", " ").Replace("\r", "");
+            return plainText.Length > 100 
+                ? plainText[..100] + "..." 
+                : plainText;
+        }
+        catch
+        {
+            return content.Length > 100 
+                ? content[..100] + "..." 
+                : content;
+        }
+    }
+}

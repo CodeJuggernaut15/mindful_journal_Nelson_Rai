@@ -1,0 +1,149 @@
+@using MindfulJournal.Services
+@inject SecurityService SecurityService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudOverlay Visible="@IsVisible" DarkBackground="true" ZIndex="9999">
+    <div @ref="_lockScreenRef" @onkeydown="HandleKeyDown" tabindex="0" style="outline: none; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+        <MudPaper Elevation="8" Class="pa-8 lock-screen-container" MaxWidth="400px">
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h5" Class="mt-3">Mindful Journal</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Type your PIN using keyboard to unlock</MudText>
+            </div>
+
+            @* PIN Display *@
+            <div class="d-flex justify-center gap-3 mb-6">
+                @for (int i = 0; i < 4; i++)
+                {
+                    var filled = i < _pin.Length;
+                    <div class="pin-dot @(filled ? "filled" : "") @(_hasError ? "error" : "")"></div>
+                }
+            </div>
+
+            @* Error Message *@
+            @if (_hasError)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Error" Align="Align.Center" Class="mb-4">
+                    Incorrect PIN. Please try again.
+                </MudText>
+            }
+        </MudPaper>
+    </div>
+</MudOverlay>
+
+<style>
+    .lock-screen-container {
+        border-radius: 16px;
+        min-width: 320px;
+    }
+
+    .pin-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid var(--mud-palette-primary);
+        transition: all 0.2s ease;
+    }
+
+    .pin-dot.filled {
+        background-color: var(--mud-palette-primary);
+        transform: scale(1.1);
+    }
+
+    .pin-dot.error {
+        border-color: var(--mud-palette-error);
+        background-color: var(--mud-palette-error);
+        animation: shake 0.3s ease;
+    }
+
+    @@keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+    
+    [Parameter]
+    public EventCallback OnUnlocked { get; set; }
+
+    private string _pin = "";
+    private bool _hasError = false;
+    private ElementReference _lockScreenRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsVisible)
+        {
+            // Focus the container to capture keyboard events
+            try
+            {
+                await _lockScreenRef.FocusAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore focus errors (e.g. if element not yet visible)
+            }
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (!IsVisible) return;
+
+        if (e.Key.Length == 1 && char.IsDigit(e.Key[0]))
+        {
+            await AddDigit(e.Key);
+        }
+        else if (e.Key == "Backspace")
+        {
+            ClearPin();
+        }
+        else if (e.Key == "Enter" || e.Key == "NumpadEnter")
+        {
+            // Optional: Handle Enter if needed, but logic is auto-submit on 4 digits
+        }
+    }
+
+    private async Task AddDigit(string digit)
+    {
+        if (_pin.Length >= 4) return;
+        
+        _hasError = false;
+        _pin += digit;
+
+        if (_pin.Length == 4)
+        {
+            await Task.Delay(200); // Brief delay for visual feedback
+            await TryUnlock();
+        }
+    }
+
+    private void ClearPin()
+    {
+        if (_pin.Length > 0)
+        {
+            _pin = _pin[..^1];
+            _hasError = false;
+        }
+    }
+
+    private async Task TryUnlock()
+    {
+        if (SecurityService.TryUnlock(_pin))
+        {
+            _pin = "";
+            _hasError = false;
+            await OnUnlocked.InvokeAsync();
+        }
+        else
+        {
+            _hasError = true;
+            _pin = "";
+        }
+    }
+}

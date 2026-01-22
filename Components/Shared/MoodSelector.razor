@@ -1,0 +1,220 @@
+@using MindfulJournal.Models
+
+<div class="mood-selector">
+    <MudText Typo="Typo.subtitle1" Class="mb-2">How are you feeling?</MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+        Select your primary mood (required) and optionally add up to 2 secondary moods
+    </MudText>
+    
+    <MudText Typo="Typo.caption" Class="mb-1" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Class="mr-1" />
+        Primary Mood
+    </MudText>
+    <div class="d-flex flex-wrap gap-2 justify-center mb-4">
+        @foreach (var mood in GetMoods())
+        {
+            var isPrimary = PrimaryMood == mood;
+            var isSecondary = SecondaryMoods.Contains(mood);
+            
+            <MudButton Variant="@(isPrimary ? Variant.Filled : Variant.Outlined)"
+                       Color="@GetButtonColor(mood)"
+                       Size="Size.Medium"
+                       OnClick="@(() => SelectPrimaryMood(mood))"
+                       Class="@($"mood-button {(isPrimary ? "primary-selected" : "")}")"
+                       Disabled="@isSecondary">
+                <div class="d-flex flex-column align-center">
+                    <span style="font-size: 1.5rem;">@MoodHelper.GetMoodEmoji(mood)</span>
+                    <MudText Typo="Typo.caption">@MoodHelper.GetMoodName(mood)</MudText>
+                </div>
+            </MudButton>
+        }
+    </div>
+    
+    <MudText Typo="Typo.caption" Class="mb-1" Color="Color.Secondary">
+        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" Class="mr-1" />
+        Secondary Moods (optional, up to 2)
+    </MudText>
+    <div class="d-flex flex-wrap gap-2 justify-center">
+        @foreach (var mood in GetMoods())
+        {
+            var isPrimary = PrimaryMood == mood;
+            var isSecondary = SecondaryMoods.Contains(mood);
+            var canAddMore = SecondaryMoods.Count < 2;
+            
+            <MudButton Variant="@(isSecondary ? Variant.Filled : Variant.Outlined)"
+                       Color="@(isSecondary ? GetButtonColor(mood) : Color.Default)"
+                       Size="Size.Small"
+                       OnClick="@(() => ToggleSecondaryMood(mood))"
+                       Class="@($"secondary-mood-button {(isSecondary ? "secondary-selected" : "")}")"
+                       Disabled="@(isPrimary || (!isSecondary && !canAddMore))">
+                <div class="d-flex align-center gap-1">
+                    <span style="font-size: 1rem;">@MoodHelper.GetMoodEmoji(mood)</span>
+                    @if (isSecondary)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                    }
+                </div>
+            </MudButton>
+        }
+    </div>
+    
+    @if (PrimaryMood != MoodType.None || SecondaryMoods.Any())
+    {
+        <div class="mt-4 pa-3 selected-moods-display rounded">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">Selected Moods:</MudText>
+            <div class="d-flex gap-2 flex-wrap align-center">
+                @if (PrimaryMood != MoodType.None)
+                {
+                    <MudChip T="string" Color="@GetChipColor(PrimaryMood)" Variant="Variant.Filled" Size="Size.Small">
+                        @MoodHelper.GetMoodEmoji(PrimaryMood) @MoodHelper.GetMoodName(PrimaryMood)
+                        <MudText Typo="Typo.caption" Class="ml-1">(Primary)</MudText>
+                    </MudChip>
+                }
+                @foreach (var mood in SecondaryMoods)
+                {
+                    <MudChip T="string" Color="@GetChipColor(mood)" Variant="Variant.Outlined" Size="Size.Small"
+                             OnClose="@(() => RemoveSecondaryMood(mood))">
+                        @MoodHelper.GetMoodEmoji(mood) @MoodHelper.GetMoodName(mood)
+                    </MudChip>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .mood-button {
+        min-width: 80px;
+        height: 70px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .mood-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+    }
+    
+    .primary-selected {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        transform: scale(1.05);
+    }
+    
+    .secondary-mood-button {
+        min-width: 50px;
+        height: 40px;
+        transition: transform 0.2s ease;
+    }
+    
+    .secondary-mood-button:hover:not(:disabled) {
+        transform: scale(1.05);
+    }
+    
+    .secondary-selected {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .selected-moods-display {
+        background-color: var(--mud-palette-background-grey);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// Gets or sets the primary selected mood.
+    /// </summary>
+    [Parameter]
+    public MoodType PrimaryMood { get; set; } = MoodType.None;
+
+    /// <summary>
+    /// Event callback for when the primary mood changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<MoodType> PrimaryMoodChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of secondary moods.
+    /// </summary>
+    [Parameter]
+    public List<MoodType> SecondaryMoods { get; set; } = new();
+
+    /// <summary>
+    /// Event callback for when the secondary moods change.
+    /// </summary>
+    [Parameter]
+    public EventCallback<List<MoodType>> SecondaryMoodsChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected mood (alias for PrimaryMood).
+    /// </summary>
+    [Parameter]
+    public MoodType SelectedMood
+    {
+        get => PrimaryMood;
+        set => PrimaryMood = value;
+    }
+
+    /// <summary>
+    /// Event callback for when the selected mood changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<MoodType> SelectedMoodChanged { get; set; }
+
+    private IEnumerable<MoodType> GetMoods()
+    {
+        return Enum.GetValues<MoodType>().Where(m => m != MoodType.None);
+    }
+
+    private Color GetButtonColor(MoodType mood)
+    {
+        return mood switch
+        {
+            MoodType.VeryHappy or MoodType.Happy => Color.Success,
+            MoodType.Calm => Color.Info,
+            MoodType.Neutral => Color.Default,
+            MoodType.Anxious => Color.Warning,
+            MoodType.Sad or MoodType.VerySad => Color.Primary,
+            MoodType.Angry => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetChipColor(MoodType mood)
+    {
+        return mood switch
+        {
+            MoodType.VeryHappy or MoodType.Happy => Color.Success,
+            MoodType.Calm => Color.Info,
+            MoodType.Neutral => Color.Default,
+            MoodType.Anxious => Color.Warning,
+            MoodType.Sad or MoodType.VerySad => Color.Primary,
+            MoodType.Angry => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task SelectPrimaryMood(MoodType mood)
+    {
+        PrimaryMood = mood;
+        await PrimaryMoodChanged.InvokeAsync(mood);
+        await SelectedMoodChanged.InvokeAsync(mood); 
+    }
+
+    private async Task ToggleSecondaryMood(MoodType mood)
+    {
+        if (SecondaryMoods.Contains(mood))
+        {
+            SecondaryMoods.Remove(mood);
+        }
+        else if (SecondaryMoods.Count < 2)
+        {
+            SecondaryMoods.Add(mood);
+        }
+        await SecondaryMoodsChanged.InvokeAsync(SecondaryMoods);
+    }
+
+    private async Task RemoveSecondaryMood(MoodType mood)
+    {
+        SecondaryMoods.Remove(mood);
+        await SecondaryMoodsChanged.InvokeAsync(SecondaryMoods);
+    }
+}
