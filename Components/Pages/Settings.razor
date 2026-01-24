@@ -1,0 +1,342 @@
+@page "/settings"
+@using MindfulJournal.Services
+@using MudBlazor.Utilities
+@inject ThemeService ThemeService
+@inject SecurityService SecurityService
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Class="mb-4">Settings</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Palette" Class="mr-2" />
+                Appearance
+            </MudText>
+            
+            <div class="d-flex justify-space-between align-center mb-4">
+                <div>
+                    <MudText Typo="Typo.body1">Dark Mode</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Switch between light and dark themes
+                    </MudText>
+                </div>
+                <MudSwitch T="bool" Checked="@_isDarkMode" Color="Color.Primary" 
+                           CheckedChanged="OnDarkModeChanged" />
+            </div>
+            
+            <MudDivider Class="my-4" />
+            
+            <MudText Typo="Typo.body1" Class="mb-2">Theme Color</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                Choose your preferred accent color
+            </MudText>
+            
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var color in ThemeService.PresetColors)
+                {
+                    var isSelected = _selectedColor == color.Value;
+                    <MudTooltip Text="@color.Key">
+                        <MudButton Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                   Style="@($"min-width: 50px; height: 50px; background-color: {(isSelected ? color.Value : "transparent")}; border-color: {color.Value}; border-width: 3px;")"
+                                   OnClick="@(() => SelectColor(color.Value))">
+                            @if (isSelected)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Style="color: white;" />
+                            }
+                        </MudButton>
+                    </MudTooltip>
+                }
+            </div>
+            
+            <MudDivider Class="my-4" />
+            
+            <MudText Typo="Typo.body1" Class="mb-2">Custom Color</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudColorPicker @bind-Value="_customColorValue" 
+                                Style="width: 100%;"
+                                DisableAlpha="true"
+                                Variant="Variant.Outlined"
+                                Placeholder="Pick custom color" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                           OnClick="ApplyCustomColor">
+                    Apply
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+    
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Security" Class="mr-2" />
+                Security & Privacy
+            </MudText>
+            
+            @if (!SecurityService.IsLockEnabled)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Protect your journal with a 4-digit PIN
+                </MudText>
+                
+                <MudTextField @bind-Value="_newPin" Label="Enter 4-digit PIN" 
+                              InputType="InputType.Password" Variant="Variant.Outlined"
+                              MaxLength="4" Class="mb-3"
+                              HelperText="PIN must be exactly 4 digits" />
+                
+                <MudTextField @bind-Value="_confirmPin" Label="Confirm PIN" 
+                              InputType="InputType.Password" Variant="Variant.Outlined"
+                              MaxLength="4" Class="mb-3" />
+                
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                           OnClick="SetupPin" FullWidth="true" Disabled="@(!CanSetupPin)">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Class="mr-2" />
+                    Enable PIN Protection
+                </MudButton>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+                    PIN protection is enabled
+                </MudAlert>
+                
+                @if (_showChangePin)
+                {
+                    <MudTextField @bind-Value="_currentPin" Label="Current PIN" 
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  MaxLength="4" Class="mb-3" />
+                    
+                    <MudTextField @bind-Value="_newPin" Label="New PIN" 
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  MaxLength="4" Class="mb-3" />
+                    
+                    <MudTextField @bind-Value="_confirmPin" Label="Confirm New PIN" 
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  MaxLength="4" Class="mb-3" />
+                    
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" 
+                                   OnClick="CancelPinChange">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                                   OnClick="ChangePin" Disabled="@(!CanChangePin)">Save</MudButton>
+                    </div>
+                }
+                else if (_showDisablePin)
+                {
+                    <MudTextField @bind-Value="_currentPin" Label="Enter Current PIN" 
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  MaxLength="4" Class="mb-3" />
+                    
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" 
+                                   OnClick="CancelPinChange">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" 
+                                   OnClick="DisablePin" Disabled="@(string.IsNullOrEmpty(_currentPin))">
+                            Disable PIN
+                        </MudButton>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex gap-2 flex-wrap">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
+                                   OnClick="@(() => _showChangePin = true)">
+                            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+                            Change PIN
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" 
+                                   OnClick="@(() => _showDisablePin = true)">
+                            <MudIcon Icon="@Icons.Material.Filled.LockOpen" Class="mr-2" />
+                            Disable PIN
+                        </MudButton>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                About
+            </MudText>
+            
+            <div class="d-flex flex-column gap-3">
+                <div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Application</MudText>
+                    <MudText Typo="Typo.body1">Mindful Journal</MudText>
+                </div>
+                
+                <div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Version</MudText>
+                    <MudText Typo="Typo.body1">1.0.0</MudText>
+                </div>
+                
+                <div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Framework</MudText>
+                    <MudText Typo="Typo.body1">.NET MAUI Blazor Hybrid</MudText>
+                </div>
+                
+                <MudDivider Class="my-2" />
+                
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    A mindful journaling application to help you track your thoughts, 
+                    moods, and personal growth journey.
+                </MudText>
+            </div>
+        </MudPaper>
+        
+        <MudPaper Elevation="2" Class="pa-4 mt-4">
+            <MudText Typo="Typo.h6" Class="mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2" />
+                Data Storage
+            </MudText>
+            
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Your journal entries are stored locally on this device using SQLite database. 
+                No data is sent to external servers.
+            </MudText>
+            
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Use the Export feature in Journal Entries to backup your data.
+            </MudAlert>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<style>
+    .color-button {
+        min-width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .color-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .color-button.selected {
+        box-shadow: 0 0 0 3px white, 0 0 0 5px currentColor;
+    }
+</style>
+
+@code {
+    private bool _isDarkMode;
+    private string _selectedColor = "";
+    private MudColor _customColorValue = new("#7B1FA2");
+    
+    private string _currentPin = "";
+    private string _newPin = "";
+    private string _confirmPin = "";
+    private bool _showChangePin = false;
+    private bool _showDisablePin = false;
+    
+    private bool CanSetupPin => _newPin.Length == 4 && _newPin == _confirmPin && _newPin.All(char.IsDigit);
+    private bool CanChangePin => _currentPin.Length == 4 && _newPin.Length == 4 && 
+                                  _newPin == _confirmPin && _newPin.All(char.IsDigit);
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        _selectedColor = ThemeService.CustomPrimaryColor;
+        _customColorValue = new MudColor(ThemeService.CustomPrimaryColor);
+    }
+
+    private void OnDarkModeChanged(bool value)
+    {
+        _isDarkMode = value;
+        ThemeService.IsDarkMode = value;
+        Snackbar.Add($"{(value ? "Dark" : "Light")} mode enabled", Severity.Info);
+    }
+
+    private void SelectColor(string color)
+    {
+        _selectedColor = color;
+        ThemeService.CustomPrimaryColor = color;
+        Snackbar.Add("Theme color updated", Severity.Success);
+    }
+
+    private void ApplyCustomColor()
+    {
+        var colorHex = _customColorValue.Value;
+        _selectedColor = colorHex;
+        ThemeService.CustomPrimaryColor = colorHex;
+        Snackbar.Add("Custom color applied", Severity.Success);
+    }
+    
+    private async Task SetupPin()
+    {
+        if (!CanSetupPin)
+        {
+            Snackbar.Add("Please enter a valid 4-digit PIN", Severity.Warning);
+            return;
+        }
+        
+        var success = await SecurityService.SetupPinAsync(_newPin);
+        if (success)
+        {
+            Snackbar.Add("PIN protection enabled successfully!", Severity.Success);
+            ClearPinFields();
+            StateHasChanged();
+        }
+        else
+        {
+            Snackbar.Add("Failed to set up PIN", Severity.Error);
+        }
+    }
+    
+    private async Task ChangePin()
+    {
+        if (!CanChangePin)
+        {
+            Snackbar.Add("Please fill in all fields correctly", Severity.Warning);
+            return;
+        }
+        
+        var success = await SecurityService.ChangePinAsync(_currentPin, _newPin);
+        if (success)
+        {
+            Snackbar.Add("PIN changed successfully!", Severity.Success);
+            CancelPinChange();
+        }
+        else
+        {
+            Snackbar.Add("Current PIN is incorrect", Severity.Error);
+        }
+    }
+    
+    private async Task DisablePin()
+    {
+        var success = await SecurityService.DisableLockAsync(_currentPin);
+        if (success)
+        {
+            Snackbar.Add("PIN protection disabled", Severity.Info);
+            CancelPinChange();
+            StateHasChanged();
+        }
+        else
+        {
+            Snackbar.Add("Incorrect PIN", Severity.Error);
+        }
+    }
+    
+    private void CancelPinChange()
+    {
+        _showChangePin = false;
+        _showDisablePin = false;
+        ClearPinFields();
+    }
+    
+    private void ClearPinFields()
+    {
+        _currentPin = "";
+        _newPin = "";
+        _confirmPin = "";
+    }
+}
