@@ -1,0 +1,205 @@
+@page "/"
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@using MindfulJournal.Components.Shared
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+
+<MudText Typo="Typo.h4" Class="mb-4">Welcome to Mindful Journal</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+            <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h4" Class="mt-2">@_entryCount</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Total Entries</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+            <MudIcon Icon="@Icons.Material.Filled.Today" Size="Size.Large" Color="Color.Success" />
+            <MudText Typo="Typo.h4" Class="mt-2">@_thisWeekCount</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">This Week</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+            <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Size="Size.Large" Color="Color.Warning" />
+            <MudText Typo="Typo.h4" Class="mt-2">@_currentStreak</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Day Streak</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center cursor-pointer stat-card" @onclick="NavigateToNewEntry">
+            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" Color="Color.Info" />
+            <MudText Typo="Typo.h6" Class="mt-2">New Entry</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Start journaling</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MoodCalendar />
+    </MudItem>
+
+    @if (_moodStats.Any())
+    {
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Your Mood Summary</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" 
+                               OnClick="NavigateToAnalytics" EndIcon="@Icons.Material.Filled.ArrowForward">
+                        View Analytics
+                    </MudButton>
+                </div>
+                <div class="d-flex gap-3 flex-wrap">
+                    @foreach (var mood in _moodStats.OrderByDescending(m => m.Value).Take(4))
+                    {
+                        <div class="d-flex flex-column align-center mood-item">
+                            <MudAvatar Size="Size.Medium" Style="@($"background-color: {MoodHelper.GetMoodColor(mood.Key)}; color: white;")">
+                                @MoodHelper.GetMoodEmoji(mood.Key)
+                            </MudAvatar>
+                            <MudText Typo="Typo.caption" Class="mt-1">@mood.Value</MudText>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+
+    @if (_popularTags.Any())
+    {
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Popular Tags</MudText>
+                <div class="d-flex gap-2 flex-wrap">
+                    @foreach (var tag in _popularTags)
+                    {
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">@tag</MudChip>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <div class="d-flex justify-space-between align-center mb-3 mt-4">
+            <MudText Typo="Typo.h5">Recent Entries</MudText>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="NavigateToEntries">
+                View All
+            </MudButton>
+        </div>
+
+        @if (_isLoading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (!_recentEntries.Any())
+        {
+            <MudPaper Elevation="1" Class="pa-6 text-center">
+                <MudIcon Icon="@Icons.Material.Filled.NoteAdd" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.h6" Class="mt-3">No entries yet</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Start your mindfulness journey by creating your first journal entry.
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="NavigateToNewEntry">
+                    Create First Entry
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            @foreach (var entry in _recentEntries)
+            {
+                <EntryCard Entry="entry" OnClick="ViewEntry" />
+            }
+        }
+    </MudItem>
+</MudGrid>
+
+<style>
+    .stat-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .mood-item {
+        transition: transform 0.2s ease;
+    }
+    
+    .mood-item:hover {
+        transform: scale(1.1);
+    }
+</style>
+
+@code {
+    private List<JournalEntry> _recentEntries = new();
+    private int _entryCount = 0;
+    private int _thisWeekCount = 0;
+    private int _currentStreak = 0;
+    private Dictionary<MoodType, int> _moodStats = new();
+    private List<string> _popularTags = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _isLoading = true;
+        
+        var allEntries = await JournalService.GetAllEntriesAsync();
+        _recentEntries = allEntries.Take(5).ToList();
+        _entryCount = allEntries.Count;
+        
+        var weekStart = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek);
+        _thisWeekCount = allEntries.Count(e => e.CreatedAt >= weekStart);
+        
+        _currentStreak = JournalService.CalculateStreak(allEntries);
+        
+        _moodStats = allEntries
+            .Where(e => e.Mood != MoodType.None)
+            .GroupBy(e => e.Mood)
+            .ToDictionary(g => g.Key, g => g.Count());
+        
+        _popularTags = allEntries
+            .SelectMany(e => e.TagList)
+            .GroupBy(t => t.ToLower())
+            .OrderByDescending(g => g.Count())
+            .Take(6)
+            .Select(g => g.Key)
+            .ToList();
+        
+        _isLoading = false;
+    }
+
+    private void NavigateToNewEntry()
+    {
+        Navigation.NavigateTo("/entry/new");
+    }
+
+    private void NavigateToEntries()
+    {
+        Navigation.NavigateTo("/entries");
+    }
+
+    private void NavigateToAnalytics()
+    {
+        Navigation.NavigateTo("/analytics");
+    }
+
+    private void ViewEntry(JournalEntry entry)
+    {
+        Navigation.NavigateTo($"/entry/{entry.Id}");
+    }
+}

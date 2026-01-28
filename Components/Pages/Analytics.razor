@@ -1,0 +1,452 @@
+@page "/analytics"
+@using MindfulJournal.Models
+@using MindfulJournal.Services
+@inject JournalService JournalService
+
+<MudText Typo="Typo.h4" Class="mb-4">Analytics & Insights</MudText>
+
+@if (_isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_totalEntries</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Entries</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Large" Color="Color.Success" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_thisMonthEntries</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">This Month</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Size="Size.Large" Color="Color.Warning" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_currentStreak</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Current Streak</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Tertiary" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_longestStreak</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Longest Streak</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+    
+    <MudGrid Class="mt-3">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Error" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_missedDays</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Missed Days (Last 30)</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.Percent" Size="Size.Large" Color="Color.Info" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_consistencyRate%</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Consistency (Last 30)</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudText Typo="Typo.h4">@_dominantMoodEmoji</MudText>
+                <MudText Typo="Typo.h6" Class="mt-2">@_dominantMoodName</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Most Common Mood</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-2">@_averageWordCount</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Avg. Words/Entry</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Elevation="2" Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Mood Distribution</MudText>
+        
+        @if (!_moodStats.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
+                No mood data available yet. Start journaling to see your mood patterns!
+            </MudText>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var mood in _moodStats.OrderByDescending(m => m.Value))
+                {
+                    var percentage = _totalEntries > 0 ? (mood.Value * 100.0 / _totalEntries) : 0;
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="mood-stat-item pa-3 rounded-lg" style="border-left: 4px solid @MoodHelper.GetMoodColor(mood.Key);">
+                            <div class="d-flex justify-space-between align-center mb-2">
+                                <div class="d-flex align-center gap-2">
+                                    <span class="mood-emoji">@MoodHelper.GetMoodEmoji(mood.Key)</span>
+                                    <MudText Typo="Typo.subtitle1">@MoodHelper.GetMoodName(mood.Key)</MudText>
+                                </div>
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@mood.Value entries</MudText>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary" Value="@percentage" Max="100" 
+                                               Style="@($"--mud-palette-primary: {MoodHelper.GetMoodColor(mood.Key)}")" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">@percentage.ToString("F1")%</MudText>
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Weekly Activity (Last 4 Weeks)</MudText>
+        
+        @if (!_weeklyActivity.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
+                No activity data available yet.
+            </MudText>
+        }
+        else
+        {
+            <div class="d-flex gap-4 flex-wrap justify-center">
+                @foreach (var week in _weeklyActivity)
+                {
+                    var maxHeight = 100;
+                    var height = _maxWeeklyEntries > 0 ? (week.Value * maxHeight / _maxWeeklyEntries) : 0;
+                    height = Math.Max(height, 10);
+                    
+                    <div class="d-flex flex-column align-center">
+                        <div class="weekly-bar" style="height: @(height)px; background-color: var(--mud-palette-primary);"></div>
+                        <MudText Typo="Typo.caption" Class="mt-2">@week.Key</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@week.Value entries</MudText>
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Popular Tags</MudText>
+        
+        @if (!_tagCounts.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
+                No tags used yet. Add tags to your entries to see patterns!
+            </MudText>
+        }
+        else
+        {
+            <div class="d-flex gap-2 flex-wrap">
+                @foreach (var tag in _tagCounts.OrderByDescending(t => t.Value).Take(15))
+                {
+                    var size = GetTagSize(tag.Value);
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" 
+                             Style="@($"font-size: {size}rem;")">
+                        @tag.Key (@tag.Value)
+                    </MudChip>
+                }
+            </div>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Word Count Trends (Last 30 Days)</MudText>
+        @if (!_wordCountSeries.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
+                No entries available for word count analysis.
+            </MudText>
+        }
+        else
+        {
+            <MudChart ChartType="ChartType.Line" ChartSeries="@_wordCountSeries" XAxisLabels="@_wordCountLabels" 
+                      Width="100%" Height="300px" ChartOptions="@_chartOptions" />
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Recent Mood Timeline (Last 14 Days)</MudText>
+        
+        @if (!_recentMoods.Any())
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
+                No entries in the last 14 days.
+            </MudText>
+        }
+        else
+        {
+            <div class="d-flex gap-3 flex-wrap justify-center">
+                @foreach (var day in _recentMoods)
+                {
+                    <MudTooltip Text="@($"{day.Date:MMM dd}: {day.MoodName}")">
+                        <div class="mood-day d-flex flex-column align-center">
+                            <MudAvatar Size="Size.Medium" 
+                                       Style="@($"background-color: {day.MoodColor}; color: white;")">
+                                @day.MoodEmoji
+                            </MudAvatar>
+                            <MudText Typo="Typo.caption" Class="mt-1">@day.Date.ToString("dd")</MudText>
+                        </div>
+                    </MudTooltip>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+<style>
+    .stat-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .mood-stat-item {
+        background-color: var(--mud-palette-background-grey);
+        transition: transform 0.2s ease;
+    }
+    
+    .mood-stat-item:hover {
+        transform: translateX(4px);
+    }
+    
+    .mood-emoji {
+        font-size: 1.5rem;
+    }
+    
+    .weekly-bar {
+        width: 40px;
+        border-radius: 4px 4px 0 0;
+        transition: height 0.3s ease;
+    }
+    
+    .mood-day {
+        transition: transform 0.2s ease;
+    }
+    
+    .mood-day:hover {
+        transform: scale(1.1);
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private int _totalEntries = 0;
+    private int _thisMonthEntries = 0;
+    private int _currentStreak = 0;
+    private int _longestStreak = 0;
+    private int _missedDays = 0;
+    private int _consistencyRate = 0;
+    private int _averageWordCount = 0;
+    private string _dominantMoodEmoji = "❓";
+    private string _dominantMoodName = "None";
+    private Dictionary<MoodType, int> _moodStats = new();
+    private Dictionary<string, int> _weeklyActivity = new();
+    private Dictionary<string, int> _tagCounts = new();
+    private List<MoodDayInfo> _recentMoods = new();
+    private int _maxWeeklyEntries = 0;
+    private int _maxTagCount = 0;
+    
+    private List<ChartSeries> _wordCountSeries = new();
+    private string[] _wordCountLabels = Array.Empty<string>();
+    private ChartOptions _chartOptions = new() { YAxisLines = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnalytics();
+    }
+
+    private async Task LoadAnalytics()
+    {
+        _isLoading = true;
+        
+        var allEntries = await JournalService.GetAllEntriesAsync();
+        _totalEntries = allEntries.Count;
+        
+        var monthStart = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+        _thisMonthEntries = allEntries.Count(e => e.CreatedAt >= monthStart);
+        
+        _currentStreak = JournalService.CalculateStreak(allEntries);
+        
+        _longestStreak = CalculateLongestStreak(allEntries);
+        
+        var (missedDays, consistencyRate) = CalculateMissedDaysAndConsistency(allEntries, 30);
+        _missedDays = missedDays;
+        _consistencyRate = consistencyRate;
+        
+        if (allEntries.Any())
+        {
+            _averageWordCount = (int)allEntries.Average(e => 
+                string.IsNullOrWhiteSpace(e.Content) ? 0 : 
+                e.Content.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length);
+        }
+        
+        _moodStats = allEntries
+            .Where(e => e.Mood != MoodType.None)
+            .GroupBy(e => e.Mood)
+            .ToDictionary(g => g.Key, g => g.Count());
+        
+        if (_moodStats.Any())
+        {
+            var dominant = _moodStats.OrderByDescending(m => m.Value).First();
+            _dominantMoodEmoji = MoodHelper.GetMoodEmoji(dominant.Key);
+            _dominantMoodName = MoodHelper.GetMoodName(dominant.Key);
+        }
+        
+        _weeklyActivity = new Dictionary<string, int>();
+        for (int i = 3; i >= 0; i--)
+        {
+            var weekStart = DateTime.Today.AddDays(-7 * (i + 1) - (int)DateTime.Today.DayOfWeek);
+            var weekEnd = weekStart.AddDays(7);
+            var weekLabel = weekStart.ToString("MMM dd");
+            var count = allEntries.Count(e => e.CreatedAt >= weekStart && e.CreatedAt < weekEnd);
+            _weeklyActivity[weekLabel] = count;
+        }
+        _maxWeeklyEntries = _weeklyActivity.Values.Any() ? _weeklyActivity.Values.Max() : 1;
+        
+        _tagCounts = allEntries
+            .SelectMany(e => e.TagList)
+            .GroupBy(t => t.ToLower())
+            .ToDictionary(g => g.Key, g => g.Count());
+        _maxTagCount = _tagCounts.Values.Any() ? _tagCounts.Values.Max() : 1;
+        
+        CalculateWordCountTrends(allEntries);
+        
+        _recentMoods = new List<MoodDayInfo>();
+        for (int i = 13; i >= 0; i--)
+        {
+            var date = DateTime.Today.AddDays(-i);
+            var entry = allEntries.FirstOrDefault(e => e.CreatedAt.Date == date);
+            if (entry != null)
+            {
+                _recentMoods.Add(new MoodDayInfo
+                {
+                    Date = date,
+                    Mood = entry.Mood,
+                    MoodEmoji = entry.MoodEmoji,
+                    MoodName = entry.MoodName,
+                    MoodColor = entry.MoodColor
+                });
+            }
+        }
+        
+        _isLoading = false;
+    }
+
+    private void CalculateWordCountTrends(List<JournalEntry> entries)
+    {
+        var data = new List<double>();
+        var labels = new List<string>();
+        
+        for (int i = 29; i >= 0; i--)
+        {
+            var date = DateTime.Today.AddDays(-i);
+            
+            if (i % 5 == 0)
+                labels.Add(date.ToString("MH/dd"));
+            else
+                labels.Add("");
+                
+            var entry = entries.FirstOrDefault(e => e.CreatedAt.Date == date);
+            if (entry != null)
+            {
+                var wordCount = string.IsNullOrWhiteSpace(entry.Content) ? 0 : 
+                    entry.Content.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                data.Add(wordCount);
+            }
+            else
+            {
+                data.Add(0);
+            }
+        }
+        
+        _wordCountLabels = labels.ToArray();
+        _wordCountSeries = new List<ChartSeries>
+        {
+            new ChartSeries { Name = "Words", Data = data.ToArray() }
+        };
+    }
+
+    private int CalculateLongestStreak(List<JournalEntry> entries)
+    {
+        if (!entries.Any()) return 0;
+        
+        var entryDates = entries
+            .Select(e => e.CreatedAt.Date)
+            .Distinct()
+            .OrderBy(d => d)
+            .ToList();
+        
+        if (!entryDates.Any()) return 0;
+        
+        int longestStreak = 1;
+        int currentStreak = 1;
+        
+        for (int i = 1; i < entryDates.Count; i++)
+        {
+            if (entryDates[i] == entryDates[i - 1].AddDays(1))
+            {
+                currentStreak++;
+                longestStreak = Math.Max(longestStreak, currentStreak);
+            }
+            else
+            {
+                currentStreak = 1;
+            }
+        }
+        
+        return longestStreak;
+    }
+
+    private (int missedDays, int consistencyRate) CalculateMissedDaysAndConsistency(List<JournalEntry> entries, int daysToCheck)
+    {
+        var today = DateTime.Today;
+        var startDate = today.AddDays(-(daysToCheck - 1));
+        
+        var entryDates = entries
+            .Where(e => e.CreatedAt.Date >= startDate && e.CreatedAt.Date <= today)
+            .Select(e => e.CreatedAt.Date)
+            .Distinct()
+            .ToHashSet();
+        
+        int daysWithEntries = entryDates.Count;
+        int missedDays = daysToCheck - daysWithEntries;
+        int consistencyRate = (int)Math.Round((double)daysWithEntries / daysToCheck * 100);
+        
+        return (missedDays, consistencyRate);
+    }
+
+    private double GetTagSize(int count)
+    {
+        if (_maxTagCount == 0) return 0.85;
+        var ratio = (double)count / _maxTagCount;
+        return 0.75 + (ratio * 0.5); 
+    }
+
+    private class MoodDayInfo
+    {
+        public DateTime Date { get; set; }
+        public MoodType Mood { get; set; }
+        public string MoodEmoji { get; set; } = "";
+        public string MoodName { get; set; } = "";
+        public string MoodColor { get; set; } = "";
+    }
+}
